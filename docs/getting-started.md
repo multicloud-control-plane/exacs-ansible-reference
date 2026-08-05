@@ -58,7 +58,7 @@ values or credentials:
 
 ```bash
 ansible-playbook --syntax-check ansible/playbooks/exacs-db-home-create.yml \
-  -e operation_file=$PWD/ansible/db-home-create.example.yml
+  -e operation_file=$PWD/ansible/example/yaml/db-home-create.example.yml
 ```
 
 This check does not contact OCI, so it does not prove that an operation

@@ -80,15 +80,27 @@ changes an ExaCS resource.
 
 ## 4. Create Database Homes, CDBs, and PDBs
 
-Copy the examples into a protected customer repository, replace fictional
-infrastructure boundary OCIDs, and choose stable resource keys and names. Do
-not commit passwords; the CDB and PDB examples read them from environment
-variables.
+Examples live under `ansible/example/yaml/` and `ansible/example/json/` —
+identical content, pick whichever format your tooling prefers. Copy one into
+your own protected customer repository, replace fictional infrastructure
+boundary OCIDs, and choose stable resource keys and names. Do not commit
+passwords; the CDB and PDB examples read them from environment variables.
+
+Organize real manifests under `ansible/manifests/<vm-cluster-name>/`, one
+subfolder per VM Cluster, so a change is scoped to one cluster at a glance.
+Name each file after the change it represents — `CRQ1042_db-home-create.yml`
+if change requests are how your organization tracks this — so the history of
+that folder reads as a log of what happened to that cluster, not a file that
+gets silently overwritten on every run:
 
 ```bash
-cp ansible/db-home-create.example.yml ansible/db-home-create.yml
-cp ansible/cdb-create.example.yml ansible/cdb-create.yml
-cp ansible/pdb-create.example.yml ansible/pdb-create.yml
+mkdir -p ansible/manifests/vmcluster-01
+cp ansible/example/yaml/db-home-create.example.yml \
+  ansible/manifests/vmcluster-01/CRQ1001_db-home-create.yml
+cp ansible/example/yaml/cdb-create.example.yml \
+  ansible/manifests/vmcluster-01/CRQ1002_cdb-create.yml
+cp ansible/example/yaml/pdb-create.example.yml \
+  ansible/manifests/vmcluster-01/CRQ1003_pdb-create.yml
 ```
 
 For each master, run `precheck`, review its OCI evidence, then run `execute`.
@@ -97,7 +109,7 @@ For example:
 ```bash
 OCI_ANSIBLE_AUTH_TYPE=instance_principal \
 ansible-playbook ansible/playbooks/exacs-db-home-create.yml \
-  -e operation_file=$PWD/ansible/db-home-create.yml \
+  -e operation_file=$PWD/ansible/manifests/vmcluster-01/CRQ1001_db-home-create.yml \
   -e operation_execution_mode=precheck
 ```
 
@@ -114,7 +126,7 @@ tags; it does not maintain an OCID registry.
 
 ```bash
 ansible-playbook ansible/playbooks/exacs-resource-discovery.yml \
-  -e operation_file=$PWD/ansible/resource-discovery.yml
+  -e operation_file=$PWD/ansible/manifests/vmcluster-01/resource-discovery.yml
 ```
 
 ## 6. Run a reviewed Day 2 operation
@@ -126,8 +138,9 @@ Day 2 run is the shape you already know from step 4.
 
 The out-of-place patch is the one with a prerequisite. Create and verify the
 compatible target Database Home first, then copy
-`ansible/out-of-place-patch.example.yml` and supply the business keys, display
-names, compartment, VM Cluster, and target version. Its precheck validates the
+`ansible/example/yaml/out-of-place-patch.example.yml` and supply the business
+keys, display names, compartment, VM Cluster, and target version. Its precheck
+validates the
 source, the target, the version, the VM Cluster, and the lifecycle state before
 anything moves.
 

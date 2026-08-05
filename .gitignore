@@ -13,10 +13,14 @@ __pycache__/
 /docs/workshop-faq.md
 
 # Completed operation manifests carry real OCIDs and must never reach GitHub.
-# Only the fictional examples (either format) and the collection pin are
-# tracked.
+# The examples live under ansible/example/{yaml,json}/ and are tracked
+# normally; this only guards against a real manifest dropped at the
+# ansible/ root instead of under manifests/. requirements.yml is the one
+# real *.yml this repo tracks at that root.
 /ansible/*.yml
 /ansible/*.json
-!/ansible/*.example.yml
-!/ansible/*.example.json
 !/ansible/requirements.yml
+
+# Real manifests organized per VM Cluster (see docs/customer-guide.md). Whole
+# subtree is real customer data, regardless of file extension.
+/ansible/manifests/
