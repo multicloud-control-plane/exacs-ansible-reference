@@ -1,0 +1,13 @@
+---
+operation_execution_mode: precheck
+exacs_project: customer-demo
+exacs_environment: nonprod
+exacs_compartment_id: ocid1.compartment.oc1..exampleuniqueID
+
+exacs_pdb_cdb_key: finance_cdb
+exacs_pdb_cdb_name: FINCDB
+exacs_pdb_key: finance_reporting_pdb
+exacs_pdb_name: FINRPT1
+exacs_pdb_admin_password: "{{ lookup('ansible.builtin.env', 'EXACS_PDB_ADMIN_PASSWORD') }}"
+exacs_pdb_tde_wallet_password: "{{ lookup('ansible.builtin.env', 'EXACS_TDE_WALLET_PASSWORD') }}"
+exacs_operation_wait_timeout: 7200

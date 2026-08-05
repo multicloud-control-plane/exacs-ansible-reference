@@ -1,0 +1,32 @@
+---
+# Verification reuses the shared resolver rather than repeating its tag filter.
+# The resolver already reads OCI, keeps only the resources this project owns,
+# and refuses to continue unless exactly one matches, which is precisely what
+# verifying a creation means: the new CDB must now be findable, and findable
+# only once.
+- name: Resolve the created CDB by automation key
+  ansible.builtin.import_tasks: ../resolve/cdb-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_cdb_key }}"
+    exacs_resolve_db_name: "{{ exacs_cdb_db_name }}"
+
+- name: Verify the created CDB
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_resolve_cdb.db_home_id == exacs_cdb_db_home_matches[0].id
+      - exacs_resolve_cdb.lifecycle_state == 'AVAILABLE'
+    fail_msg: >-
+      The created CDB is not available in the approved Database Home.
+  check_mode: false
+
+- name: Report the created CDB
+  ansible.builtin.debug:
+    msg:
+      resource_key: "{{ exacs_cdb_key }}"
+      db_name: "{{ exacs_resolve_cdb.db_name }}"
+      database_id: "{{ exacs_resolve_cdb.id }}"
+      db_home_id: "{{ exacs_resolve_cdb.db_home_id }}"
+      lifecycle_state: "{{ exacs_resolve_cdb.lifecycle_state }}"

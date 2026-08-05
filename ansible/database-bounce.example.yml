@@ -1,0 +1,43 @@
+---
+# Copy this file to database-bounce.yml.
+#
+# This is the only operation in this reference that changes something on the
+# database node itself. The OCI API can start and stop a PDB, and it can
+# restart a whole DB node, but it has no operation that restarts a container
+# database, so the change is made with dbaascli over SSH. Identity resolution
+# and the evidence gate are unchanged: verify reads the result back from OCI.
+operation_execution_mode: precheck
+exacs_project: customer-demo
+exacs_environment: nonprod
+exacs_bounce_compartment_id: ocid1.compartment.oc1..example
+exacs_bounce_vm_cluster_id: ocid1.cloudvmcluster.oc1.uk-london-1.example
+
+exacs_bounce_database_name: EXACREF
+exacs_bounce_database_key: exacref_cdb
+
+# Host access. The node itself is discovered from OCI facts, so only
+# credentials are declared here. Keep the private key outside this repository.
+exacs_bounce_ssh_user: opc
+exacs_bounce_ssh_private_key: /secure/path/exacs-node-key
+
+# How the runner reaches the node. A VM Cluster subnet normally forbids public
+# IPs, so pick one of three:
+#
+#   1. Direct. The runner is already inside the VCN, or routed to it.
+#      Leave both values empty.
+#
+#   2. Your own jump host.
+#      exacs_bounce_bastion_address: 10.0.0.10
+#      exacs_bounce_bastion_user: opc
+#
+#   3. OCI Bastion service. Create an SSH port forwarding session first, then
+#      use its OCID as the user. The session endpoint is regional. A managed
+#      SSH session will not do: it needs Oracle Cloud Agent on the target, and
+#      a VM Cluster node is not a compute instance that runs it.
+#      exacs_bounce_bastion_address: host.bastion.uk-london-1.oci.oraclecloud.com
+#      exacs_bounce_bastion_user: ocid1.bastionsession.oc1.uk-london-1.example
+#      The session is bound to one address and port, so target the node this
+#      operation resolves, port 22, or the bastion refuses the connection.
+#
+exacs_bounce_bastion_address: ""
+exacs_bounce_bastion_user: opc

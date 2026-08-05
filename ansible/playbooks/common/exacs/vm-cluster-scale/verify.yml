@@ -1,0 +1,25 @@
+---
+- name: Read the Cloud VM Cluster after scaling
+  oracle.oci.oci_database_cloud_vm_cluster_facts:
+    cloud_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_vm_cluster_post_state
+  check_mode: false
+
+- name: Assert the Cloud VM Cluster scale completed
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_vm_cluster_post_state.cloud_vm_clusters | length == 1
+      - exacs_vm_cluster_post_state.cloud_vm_clusters[0].id == exacs_vm_cluster_id
+      - exacs_vm_cluster_post_state.cloud_vm_clusters[0].lifecycle_state == 'AVAILABLE'
+      - exacs_vm_cluster_post_state.cloud_vm_clusters[0].cpu_core_count == exacs_vm_cluster_target_cpu_core_count
+    fail_msg: The VM Cluster did not reach the approved CPU core count.
+  check_mode: false
+
+- name: Report final Cloud VM Cluster capacity
+  ansible.builtin.debug:
+    msg:
+      display_name: "{{ exacs_vm_cluster_post_state.cloud_vm_clusters[0].display_name }}"
+      cpu_core_count: "{{ exacs_vm_cluster_post_state.cloud_vm_clusters[0].cpu_core_count }}"
+      lifecycle_state: "{{ exacs_vm_cluster_post_state.cloud_vm_clusters[0].lifecycle_state }}"

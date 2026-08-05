@@ -1,0 +1,17 @@
+---
+# Shared helper: build the OCI CLI authentication arguments.
+#
+# The CLI reads its own environment variables, which are not the ones the
+# collection reads. Passing them explicitly means a customer configures the
+# runner once and both layers obey the same settings.
+#
+# It leaves the argument list in exacs_cli_auth_args.
+- name: Build the OCI CLI authentication arguments
+  ansible.builtin.set_fact:
+    exacs_cli_auth_args: >-
+      {{ ['--auth', exacs_auth_type]
+         + (['--config-file', lookup('ansible.builtin.env', 'OCI_CONFIG_FILE')]
+            if lookup('ansible.builtin.env', 'OCI_CONFIG_FILE') else [])
+         + (['--profile', lookup('ansible.builtin.env', 'OCI_CONFIG_PROFILE')]
+            if lookup('ansible.builtin.env', 'OCI_CONFIG_PROFILE') else []) }}
+  check_mode: false

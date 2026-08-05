@@ -1,0 +1,96 @@
+---
+- name: Read the approved Cloud VM Cluster
+  oracle.oci.oci_database_cloud_vm_cluster_facts:
+    cloud_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_vm_cluster_state
+  check_mode: false
+
+- name: List Database Homes in the approved scope
+  oracle.oci.oci_database_db_home_facts:
+    compartment_id: "{{ exacs_compartment_id }}"
+    vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_db_home_inventory
+  check_mode: false
+
+# Read the expression as one sentence: of the Database Homes on this cluster,
+# keep the ones that carry ownership tags, then the ones belonging to this
+# project, this environment and this resource key. The assertion below requires
+# the result to be empty, because this operation is a creation. The shared
+# resolver is not used here: it asserts that exactly one resource matches, which
+# is the opposite of what a creation needs.
+- name: Select Database Homes already owning the requested key
+  ansible.builtin.set_fact:
+    exacs_db_home_key_matches: >-
+      {{ exacs_db_home_inventory.db_homes
+         | selectattr('freeform_tags.exacs_project', 'defined')
+         | selectattr('freeform_tags.exacs_project', 'equalto', exacs_project)
+         | selectattr('freeform_tags.exacs_environment', 'equalto', exacs_environment)
+         | selectattr('freeform_tags.exacs_resource_key', 'equalto', exacs_db_home_key)
+         | list }}
+  check_mode: false
+
+- name: Validate the approved Database Home creation boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_vm_cluster_state.cloud_vm_clusters | length == 1
+      - exacs_vm_cluster_state.cloud_vm_clusters[0].compartment_id == exacs_compartment_id
+      - exacs_vm_cluster_state.cloud_vm_clusters[0].lifecycle_state == 'AVAILABLE'
+      - exacs_db_home_key_matches | length == 0
+      - exacs_db_home_key | length > 0
+      - exacs_db_home_display_name | length > 0
+    fail_msg: >-
+      A Database Home already owns this resource key in this project and
+      environment, or the approved VM Cluster is unavailable.
+  check_mode: false
+
+- name: Initialise the optional Database Software Image resolution
+  ansible.builtin.set_fact:
+    exacs_db_home_software_image_matches: []
+  check_mode: false
+
+- name: List the approved Database Software Image by display name
+  oracle.oci.oci_database_software_image_facts:
+    compartment_id: "{{ exacs_compartment_id }}"
+    display_name: "{{ exacs_db_home_database_software_image_display_name }}"
+    image_type: DATABASE_IMAGE
+    lifecycle_state: AVAILABLE
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_db_home_software_image_inventory
+  when: exacs_db_home_database_software_image_display_name | default('', true) | length > 0
+  check_mode: false
+
+- name: Resolve the optional Database Software Image
+  ansible.builtin.set_fact:
+    exacs_db_home_software_image_matches: >-
+      {{ exacs_db_home_software_image_inventory.database_software_images
+         | selectattr('database_version', 'equalto', exacs_db_home_db_version)
+         | list }}
+  when: exacs_db_home_database_software_image_display_name | default('', true) | length > 0
+  check_mode: false
+
+- name: Validate the optional Database Software Image resolution
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_db_home_software_image_matches | length == 1
+    fail_msg: The requested Database Software Image is not uniquely resolved by display name and database version.
+  when: exacs_db_home_database_software_image_display_name | default('', true) | length > 0
+  check_mode: false
+
+- name: Report the approved Database Home creation target
+  ansible.builtin.debug:
+    msg:
+      target_vm_cluster:
+        display_name: "{{ exacs_vm_cluster_state.cloud_vm_clusters[0].display_name }}"
+        lifecycle_state: "{{ exacs_vm_cluster_state.cloud_vm_clusters[0].lifecycle_state }}"
+      db_home_to_create:
+        resource_key: "{{ exacs_db_home_key }}"
+        display_name: "{{ exacs_db_home_display_name }}"
+        db_version: "{{ exacs_db_home_db_version }}"
+      software_image: >-
+        {{ exacs_db_home_software_image_matches[0].display_name
+           if exacs_db_home_software_image_matches | length > 0
+           else 'none (using db_version directly)' }}

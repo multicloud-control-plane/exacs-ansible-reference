@@ -1,0 +1,24 @@
+---
+- name: Resolve the CDB by automation key
+  ansible.builtin.import_tasks: ../resolve/cdb-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_pdb_compartment_id }}"
+    exacs_resolve_key: "{{ exacs_pdb_cdb_key }}"
+    exacs_resolve_db_name: "{{ exacs_pdb_cdb_name }}"
+
+- name: Bind the resolved CDB for this operation
+  ansible.builtin.set_fact:
+    exacs_pdb_container_database_id: "{{ exacs_resolve_cdb.id }}"
+  check_mode: false
+
+- name: Resolve the PDB by automation key
+  ansible.builtin.import_tasks: ../resolve/pdb-by-key.yml
+  vars:
+    exacs_resolve_container_database_id: "{{ exacs_pdb_container_database_id }}"
+    exacs_resolve_key: "{{ exacs_pdb_key }}"
+    exacs_resolve_pdb_name: "{{ exacs_pdb_name }}"
+
+- name: Set OCI IDs for restart internals
+  ansible.builtin.set_fact:
+    exacs_pdb_id: "{{ exacs_resolve_pdb.id }}"
+  check_mode: false

@@ -1,0 +1,38 @@
+---
+# The move relocates a running CDB between Database Homes. If it does not
+# complete, the failure path reports which Database Home the CDB is actually
+# in, so the customer knows whether the database is on the old or new patch
+# level.
+- name: Execute the approved out-of-place patch
+  block:
+    - name: Move the CDB to the target Database Home
+      oracle.oci.oci_database_database:
+        database_id: "{{ exacs_patch_database_id }}"
+        db_home_id: "{{ exacs_patch_target_db_home_id }}"
+        state: present
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_patch_timeout_seconds }}"
+      register: exacs_patch_result
+
+  rescue:
+    - name: Read the observed CDB state after the incomplete patch
+      oracle.oci.oci_database_database_facts:
+        database_id: "{{ exacs_patch_database_id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_patch_incomplete_state
+      ignore_errors: true
+      check_mode: false
+
+    - name: Fail with the Database Home the CDB was left in
+      ansible.builtin.fail:
+        msg: >-
+          The out-of-place patch of CDB {{ exacs_patch_database_name }} did not
+          complete:
+          {{ exacs_patch_result.msg | default('no error text returned') }}.
+          Observed lifecycle state:
+          {{ exacs_patch_incomplete_state.databases[0].lifecycle_state | default('could not be read') }},
+          current Database Home:
+          {{ exacs_patch_incomplete_state.databases[0].db_home_id | default('could not be read') }}.
+          Compare that against the approved target Database Home to confirm
+          whether the database is running at the old or the new patch level.

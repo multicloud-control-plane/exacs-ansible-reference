@@ -1,0 +1,21 @@
+---
+# Copy this file to move-skip-datapatch.yml.
+#
+# This is the first half of a two-window patch. It moves a CDB to a higher
+# Database Home but does NOT run datapatch, so the outage is limited to the
+# move. Complete the patch later with exacs-database-run-datapatch.
+#
+# OCI accepts patchOptions.shouldSkipDataPatch on this call, but the Ansible
+# collection does not expose it, so the apply stage uses the OCI CLI.
+operation_execution_mode: precheck
+exacs_project: customer-demo
+exacs_environment: nonprod
+exacs_move_compartment_id: ocid1.compartment.oc1..example
+exacs_move_vm_cluster_id: ocid1.cloudvmcluster.oc1.uk-london-1.example
+
+exacs_move_database_name: EXACREF
+exacs_move_database_key: exacref_cdb
+exacs_move_source_db_home_key: reporting_dbhome_23_26_2
+exacs_move_target_db_home_key: reporting_dbhome_23_26_3
+exacs_move_target_db_version: 23.26.3.0.0
+exacs_move_timeout_seconds: 10800

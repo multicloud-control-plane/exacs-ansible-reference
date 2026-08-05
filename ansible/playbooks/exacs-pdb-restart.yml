@@ -1,0 +1,31 @@
+---
+- name: ExaCS PDB Restart
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ operation_file }}"
+
+  vars:
+    exacs_auth_type: >-
+      {{ lookup('ansible.builtin.env', 'OCI_ANSIBLE_AUTH_TYPE') | default('instance_principal', true) }}
+
+  pre_tasks:
+    - name: Require an explicit execution mode
+      ansible.builtin.import_tasks: common/exacs/operation/require-execution-mode.yml
+
+  tasks:
+    - name: Resolve the approved resource identities
+      ansible.builtin.import_tasks: common/exacs/pdb-restart/resolve.yml
+
+    - name: Precheck the PDB restart
+      ansible.builtin.import_tasks: common/exacs/pdb-restart/precheck.yml
+
+    - name: Apply the approved PDB restart
+      ansible.builtin.import_tasks: common/exacs/pdb-restart/apply.yml
+      when: operation_execution_mode == 'execute'
+
+    - name: Verify the PDB restart
+      ansible.builtin.import_tasks: common/exacs/pdb-restart/verify.yml
+      when: operation_execution_mode == 'execute'

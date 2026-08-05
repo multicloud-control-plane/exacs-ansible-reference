@@ -1,0 +1,13 @@
+---
+# Copy this file to vm-cluster-scale.yml and replace every fictional value.
+exacs_vm_cluster_id: ocid1.cloudvmcluster.oc1.uk-london-1.example
+exacs_vm_cluster_display_name: example-exacs-vm-cluster
+exacs_vm_cluster_compartment_id: ocid1.compartment.oc1..example
+
+# The source must be the cluster's current count, and the precheck refuses the
+# run if it is not. The target may be higher or lower; a target of 0 is legal
+# and leaves every database on the cluster without CPU, so the precheck says so
+# before you approve the run.
+exacs_vm_cluster_source_cpu_core_count: 4
+exacs_vm_cluster_target_cpu_core_count: 6
+exacs_vm_cluster_timeout_seconds: 7200

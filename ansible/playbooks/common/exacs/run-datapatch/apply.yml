@@ -1,0 +1,46 @@
+---
+# The collection has no module for RunDataPatch, so this is the approved OCI
+# CLI fallback. A datapatch that does not complete can leave the CDB mid-update
+# with the patch partially applied, so the failure path reports the state the
+# database was left in.
+- name: Run the approved datapatch
+  block:
+    - name: Apply the datapatch through the OCI CLI
+      ansible.builtin.command:
+        argv: >-
+          {{ ['oci', 'db', 'database', 'run-data-patch',
+              '--database-id', exacs_datapatch_database_id,
+              '--action', 'APPLY',
+              '--wait-for-state', 'AVAILABLE',
+              '--max-wait-seconds', exacs_datapatch_timeout_seconds | string]
+             + exacs_datapatch_cli_pdb_args
+             + exacs_datapatch_cli_options_args
+             + exacs_cli_auth_args }}
+      register: exacs_datapatch_apply_result
+      changed_when: exacs_datapatch_apply_result.rc == 0
+
+  rescue:
+    - name: Read the observed CDB state after the incomplete datapatch
+      oracle.oci.oci_database_database_facts:
+        database_id: "{{ exacs_datapatch_database_id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_datapatch_incomplete_state
+      ignore_errors: true
+      check_mode: false
+
+    # The CLI reports a refusal as a JSON document. Report the one sentence a
+    # customer can act on instead. The fallback is applied before first, not
+    # after it, because regex_search returns None when there is no match and
+    # None cannot be fed to first.
+    - name: Fail with the state the CDB was left in
+      ansible.builtin.fail:
+        msg: >-
+          The datapatch of CDB {{ exacs_datapatch_database_name }} did not
+          complete:
+          {{ (exacs_datapatch_apply_result.stderr
+              | regex_search('"message": "([^"]*)"', '\1')
+              or [exacs_datapatch_apply_result.stderr | default('no error text returned', true) | trim]) | first }}.
+          Observed lifecycle state:
+          {{ exacs_datapatch_incomplete_state.databases[0].lifecycle_state | default('could not be read') }}.
+          The patch may be partially applied. Confirm the database state in the
+          OCI console before rerunning.

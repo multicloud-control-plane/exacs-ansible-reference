@@ -1,0 +1,24 @@
+---
+# The mutating call carries the new password, so it is censored. The rescue
+# reports only the API error text, which never contains the password, so a
+# failure stays diagnosable without lowering the password protection.
+- name: Rotate the CDB administrator password
+  block:
+    - name: Set the new administrator password
+      oracle.oci.oci_database_database:
+        database_id: "{{ exacs_rotate_database_id }}"
+        new_admin_password: "{{ exacs_rotate_new_admin_password }}"
+        state: present
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_rotate_timeout_seconds | default(3600) }}"
+      register: exacs_rotate_result
+      no_log: true
+
+  rescue:
+    - name: Report why the password rotation failed
+      ansible.builtin.fail:
+        msg: >-
+          Rotating the administrator password for CDB
+          {{ exacs_rotate_database_name }} failed:
+          {{ exacs_rotate_result.msg | default('no error text returned') }}

@@ -1,0 +1,28 @@
+---
+- name: ExaCS VM Cluster Scale
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ operation_file }}"
+
+  vars:
+    exacs_auth_type: >-
+      {{ lookup('ansible.builtin.env', 'OCI_ANSIBLE_AUTH_TYPE') | default('instance_principal', true) }}
+
+  pre_tasks:
+    - name: Require an explicit execution mode
+      ansible.builtin.import_tasks: common/exacs/operation/require-execution-mode.yml
+
+  tasks:
+    - name: Precheck the VM Cluster scale
+      ansible.builtin.import_tasks: common/exacs/vm-cluster-scale/precheck.yml
+
+    - name: Apply the approved VM Cluster scale
+      ansible.builtin.import_tasks: common/exacs/vm-cluster-scale/apply.yml
+      when: operation_execution_mode == 'execute'
+
+    - name: Verify the VM Cluster scale
+      ansible.builtin.import_tasks: common/exacs/vm-cluster-scale/verify.yml
+      when: operation_execution_mode == 'execute'

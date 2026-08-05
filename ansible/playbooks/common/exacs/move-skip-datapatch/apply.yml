@@ -1,0 +1,66 @@
+---
+# OCI accepts patchOptions.shouldSkipDataPatch on the same UpdateDatabase call
+# that moves a database between Database Homes, but oracle.oci 5.5.0 does not
+# expose it, so this is the approved OCI CLI fallback. A move that does not
+# complete can leave the CDB mid-update, so the failure path reports which
+# Database Home it was left in.
+- name: Move the approved CDB without running datapatch
+  block:
+    - name: Move the CDB through the OCI CLI
+      ansible.builtin.command:
+        argv: >-
+          {{ ['oci', 'db', 'database', 'update',
+              '--database-id', exacs_move_database_id,
+              '--db-home-id', exacs_move_target_db_home.id,
+              '--patch-options', {'shouldSkipDataPatch': true} | to_json,
+              '--wait-for-state', 'AVAILABLE',
+              '--max-wait-seconds', exacs_move_timeout_seconds | string,
+              '--force']
+             + exacs_cli_auth_args }}
+      register: exacs_move_apply_result
+      changed_when: exacs_move_apply_result.rc == 0
+      failed_when: false
+
+    # Extracted once, before anything reports it. Ansible templates fail_msg
+    # while finalizing task arguments, before it evaluates the assertion, so a
+    # message that cannot be rendered fails the task even when the assertion
+    # would have passed. regex_search returns None when the CLI error is not a
+    # JSON document, and None cannot be fed to first, so the fallback has to be
+    # applied before first, not after it.
+    - name: Extract the OCI CLI error text, if there is one
+      ansible.builtin.set_fact:
+        exacs_move_error_text: >-
+          {{ (exacs_move_apply_result.stderr
+              | regex_search('"message": "([^"]*)"', '\1')
+              or [exacs_move_apply_result.stderr | default('', true) | trim]) | first }}
+      check_mode: false
+
+    - name: Require the move to have succeeded
+      ansible.builtin.assert:
+        quiet: true
+        that:
+          - exacs_move_apply_result.rc == 0
+        fail_msg: >-
+          Moving {{ exacs_move_database_name }} failed:
+          {{ exacs_move_error_text | default('no error text returned', true) }}
+
+  rescue:
+    - name: Read the observed CDB state after the incomplete move
+      oracle.oci.oci_database_database_facts:
+        database_id: "{{ exacs_move_database_id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_move_incomplete_state
+      ignore_errors: true
+      check_mode: false
+
+    - name: Fail with the Database Home the CDB was left in
+      ansible.builtin.fail:
+        msg: >-
+          The move of CDB {{ exacs_move_database_name }} did not complete:
+          {{ exacs_move_error_text | default('no error text returned', true) }}.
+          Observed lifecycle state:
+          {{ exacs_move_incomplete_state.databases[0].lifecycle_state | default('could not be read') }},
+          current Database Home:
+          {{ exacs_move_incomplete_state.databases[0].db_home_id | default('could not be read') }}.
+          Compare that against the approved target to confirm whether the
+          database is running from the old or the new Oracle Home.

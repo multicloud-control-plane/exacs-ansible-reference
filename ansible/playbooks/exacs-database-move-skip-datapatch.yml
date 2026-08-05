@@ -1,0 +1,31 @@
+---
+- name: ExaCS Database Move Without Datapatch
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ operation_file }}"
+
+  vars:
+    exacs_auth_type: >-
+      {{ lookup('ansible.builtin.env', 'OCI_ANSIBLE_AUTH_TYPE') | default('instance_principal', true) }}
+
+  pre_tasks:
+    - name: Require an explicit execution mode
+      ansible.builtin.import_tasks: common/exacs/operation/require-execution-mode.yml
+
+  tasks:
+    - name: Resolve the approved resource identities
+      ansible.builtin.import_tasks: common/exacs/move-skip-datapatch/resolve.yml
+
+    - name: Precheck the move
+      ansible.builtin.import_tasks: common/exacs/move-skip-datapatch/precheck.yml
+
+    - name: Apply the approved move
+      ansible.builtin.import_tasks: common/exacs/move-skip-datapatch/apply.yml
+      when: operation_execution_mode == 'execute'
+
+    - name: Verify the move
+      ansible.builtin.import_tasks: common/exacs/move-skip-datapatch/verify.yml
+      when: operation_execution_mode == 'execute'

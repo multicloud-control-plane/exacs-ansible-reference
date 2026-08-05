@@ -1,0 +1,38 @@
+---
+- name: Read the CDB after the datapatch
+  oracle.oci.oci_database_database_facts:
+    database_id: "{{ exacs_datapatch_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_datapatch_post_database_state
+  check_mode: false
+
+- name: Read the PDBs after the datapatch
+  oracle.oci.oci_database_pluggable_database_facts:
+    database_id: "{{ exacs_datapatch_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_datapatch_post_pdb_state
+  check_mode: false
+
+- name: Assert the datapatch left the CDB and its PDBs available
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_datapatch_post_database_state.databases | length == 1
+      - exacs_datapatch_post_database_state.databases[0].lifecycle_state == 'AVAILABLE'
+      - >-
+        exacs_datapatch_post_pdb_state.pluggable_databases
+        | rejectattr('lifecycle_state', 'equalto', 'AVAILABLE')
+        | list | length == 0
+    fail_msg: >-
+      The datapatch completed but the CDB or one of its pluggable databases is
+      not available. The patch may be partially applied.
+  check_mode: false
+
+- name: Report the final datapatch state
+  ansible.builtin.debug:
+    msg:
+      db_name: "{{ exacs_datapatch_post_database_state.databases[0].db_name }}"
+      lifecycle_state: "{{ exacs_datapatch_post_database_state.databases[0].lifecycle_state }}"
+      pluggable_databases: >-
+        {{ exacs_datapatch_post_pdb_state.pluggable_databases
+           | map(attribute='pdb_name') | list }}

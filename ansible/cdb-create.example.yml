@@ -1,0 +1,19 @@
+---
+# Business identifiers are stable names and tags. OCI IDs are needed only for
+# the existing infrastructure boundary: compartment and VM Cluster.
+operation_execution_mode: precheck
+exacs_project: customer-demo
+exacs_environment: nonprod
+exacs_compartment_id: ocid1.compartment.oc1..exampleuniqueID
+exacs_vm_cluster_id: ocid1.cloudvmcluster.oc1.uk-london-1.exampleuniqueID
+
+exacs_cdb_db_home_key: reporting_dbhome_23_26_3
+exacs_cdb_key: finance_cdb
+exacs_cdb_db_name: FINCDB
+exacs_cdb_initial_pdb_name: FINPDB1
+exacs_cdb_initial_pdb_key: finance_initial_pdb
+exacs_cdb_admin_password: "{{ lookup('ansible.builtin.env', 'EXACS_CDB_ADMIN_PASSWORD') }}"
+exacs_cdb_character_set: AL32UTF8
+exacs_cdb_ncharacter_set: AL16UTF16
+exacs_cdb_auto_backup_enabled: false
+exacs_operation_wait_timeout: 7200

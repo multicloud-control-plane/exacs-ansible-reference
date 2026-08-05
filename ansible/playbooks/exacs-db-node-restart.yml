@@ -1,0 +1,28 @@
+---
+- name: ExaCS DB Node Restart
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ operation_file }}"
+
+  vars:
+    exacs_auth_type: >-
+      {{ lookup('ansible.builtin.env', 'OCI_ANSIBLE_AUTH_TYPE') | default('instance_principal', true) }}
+
+  pre_tasks:
+    - name: Require an explicit execution mode
+      ansible.builtin.import_tasks: common/exacs/operation/require-execution-mode.yml
+
+  tasks:
+    - name: Precheck the DB Node restart
+      ansible.builtin.import_tasks: common/exacs/db-node-restart/precheck.yml
+
+    - name: Apply the approved DB Node restart
+      ansible.builtin.import_tasks: common/exacs/db-node-restart/apply.yml
+      when: operation_execution_mode == 'execute'
+
+    - name: Verify the DB Node restart
+      ansible.builtin.import_tasks: common/exacs/db-node-restart/verify.yml
+      when: operation_execution_mode == 'execute'

@@ -1,0 +1,22 @@
+---
+# The resolver already asserts the CDB exists, is uniquely identified, and is
+# AVAILABLE, so the only boundary left to check here is that a new password
+# was actually supplied.
+- name: Validate the approved password rotation boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_rotate_new_admin_password | length > 0
+    fail_msg: >-
+      The new administrator password is unavailable in the runner environment.
+  # Not no_log: assert reports the literal text of a failed expression, never
+  # its evaluated value, so the password cannot leak here. Suppressing output
+  # would only hide fail_msg and leave the customer without a reason.
+  check_mode: false
+
+- name: Report the CDB targeted for password rotation
+  ansible.builtin.debug:
+    msg:
+      db_name: "{{ exacs_resolve_cdb.db_name }}"
+      lifecycle_state: "{{ exacs_resolve_cdb.lifecycle_state }}"
+      db_home_id: "{{ exacs_resolve_cdb.db_home_id }}"

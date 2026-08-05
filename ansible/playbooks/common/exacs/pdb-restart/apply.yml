@@ -1,0 +1,40 @@
+---
+# The stop and start are two separate OCI calls. If the start does not
+# complete, the PDB is left stopped and unavailable to applications, so the
+# failure path must say so rather than only reporting a failed task.
+- name: Restart the approved PDB
+  block:
+    - name: Stop the approved PDB
+      oracle.oci.oci_database_pluggable_database_actions:
+        pluggable_database_id: "{{ exacs_pdb_id }}"
+        action: stop
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_pdb_timeout_seconds }}"
+
+    - name: Start the approved PDB
+      oracle.oci.oci_database_pluggable_database_actions:
+        pluggable_database_id: "{{ exacs_pdb_id }}"
+        action: start
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_pdb_timeout_seconds }}"
+
+  rescue:
+    - name: Read the observed PDB state after the incomplete restart
+      oracle.oci.oci_database_pluggable_database_facts:
+        pluggable_database_id: "{{ exacs_pdb_id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_pdb_incomplete_state
+      ignore_errors: true
+      check_mode: false
+
+    - name: Fail with the state the PDB was left in
+      ansible.builtin.fail:
+        msg: >-
+          The restart of PDB {{ exacs_pdb_name }} did not complete. The stop
+          may have succeeded while the start did not, which leaves the PDB
+          unavailable to applications. Observed lifecycle state:
+          {{ exacs_pdb_incomplete_state.pluggable_databases[0].lifecycle_state | default('could not be read') }}.
+          Confirm the PDB state in the OCI console and start it before
+          returning the environment to service.

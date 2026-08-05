@@ -1,0 +1,46 @@
+---
+# Identity comes from the shared resolvers, exactly as it does for the
+# API-based operations. Only the mutating call happens on the host.
+- name: Resolve the CDB by automation key
+  ansible.builtin.import_tasks: ../resolve/cdb-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_bounce_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_bounce_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_bounce_database_key }}"
+    exacs_resolve_db_name: "{{ exacs_bounce_database_name }}"
+
+- name: Bind the resolved CDB for this operation
+  ansible.builtin.set_fact:
+    exacs_bounce_database_id: "{{ exacs_resolve_cdb.id }}"
+  check_mode: false
+
+# The node is discovered from OCI facts too, so no host inventory file is
+# needed. OCI stays the only source of truth, as it is for every other
+# operation.
+- name: List the DB nodes of the approved VM Cluster
+  oracle.oci.oci_database_db_node_facts:
+    compartment_id: "{{ exacs_bounce_compartment_id }}"
+    vm_cluster_id: "{{ exacs_bounce_vm_cluster_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_bounce_db_node_inventory
+  check_mode: false
+
+- name: Select an available DB node to run dbaascli on
+  ansible.builtin.set_fact:
+    exacs_bounce_db_node: >-
+      {{ exacs_bounce_db_node_inventory.db_nodes
+         | selectattr('lifecycle_state', 'equalto', 'AVAILABLE')
+         | sort(attribute='hostname') | first }}
+  check_mode: false
+
+- name: Read the network interface of the selected DB node
+  oracle.oci.oci_network_vnic_facts:
+    vnic_id: "{{ exacs_bounce_db_node.vnic_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_bounce_db_node_vnic
+  check_mode: false
+
+- name: Bind the address to run dbaascli on
+  ansible.builtin.set_fact:
+    exacs_bounce_node_address: "{{ exacs_bounce_db_node_vnic.vnic.private_ip }}"
+  check_mode: false

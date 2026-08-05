@@ -1,0 +1,60 @@
+---
+- name: Read the Cloud VM Cluster capacity
+  oracle.oci.oci_database_cloud_vm_cluster_facts:
+    cloud_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_discovery_vm_cluster_state
+  check_mode: false
+
+- name: Read Database Homes in the approved scope
+  oracle.oci.oci_database_db_home_facts:
+    compartment_id: "{{ exacs_compartment_id }}"
+    vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_discovery_db_home_inventory
+  check_mode: false
+
+# OCI rejects a database listing scoped only to a compartment: it requires
+# dbHomeId or systemId. So read them one Database Home at a time.
+- name: Read CDBs in each Database Home
+  oracle.oci.oci_database_database_facts:
+    compartment_id: "{{ exacs_compartment_id }}"
+    db_home_id: "{{ item.id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  loop: "{{ exacs_discovery_db_home_inventory.db_homes }}"
+  loop_control:
+    label: "{{ item.display_name }}"
+  register: exacs_discovery_cdb_results
+  check_mode: false
+
+- name: Read PDBs in the approved compartment
+  oracle.oci.oci_database_pluggable_database_facts:
+    compartment_id: "{{ exacs_compartment_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_discovery_pdb_inventory
+  check_mode: false
+
+# Same filter as the resolvers, with one difference worth noticing: it stops at
+# project and environment and does not filter by resource key, because discovery
+# reports every resource this project owns rather than picking one out. So there
+# is no "exactly one" assertion here either.
+- name: Select resources owned by this project and environment
+  ansible.builtin.set_fact:
+    # The VM Cluster is a boundary resource identified by its OCID, not by
+    # ownership tags, same as everywhere else it appears in this repo.
+    exacs_discovery_vm_cluster: "{{ exacs_discovery_vm_cluster_state.cloud_vm_clusters[0] }}"
+    exacs_discovery_db_homes: "{{ exacs_discovery_db_home_inventory.db_homes }}"
+    exacs_discovery_cdbs: >-
+      {{ exacs_discovery_cdb_results.results
+         | map(attribute='databases') | flatten
+         | selectattr('freeform_tags.exacs_project', 'defined')
+         | selectattr('freeform_tags.exacs_project', 'equalto', exacs_project)
+         | selectattr('freeform_tags.exacs_environment', 'equalto', exacs_environment)
+         | list }}
+    exacs_discovery_pdbs: >-
+      {{ exacs_discovery_pdb_inventory.pluggable_databases
+         | selectattr('freeform_tags.exacs_project', 'defined')
+         | selectattr('freeform_tags.exacs_project', 'equalto', exacs_project)
+         | selectattr('freeform_tags.exacs_environment', 'equalto', exacs_environment)
+         | list }}
+  check_mode: false

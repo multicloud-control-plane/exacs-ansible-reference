@@ -1,0 +1,58 @@
+---
+# The create task carries the administrator password, so it is censored. The
+# rescue reports only the API error text, which never contains the password,
+# so a failure stays diagnosable.
+- name: Create the approved CDB and initial PDB
+  block:
+    # The module lists existing databases to stay idempotent, and that listing
+    # needs the compartment as well as the Database Home.
+    - name: Create the CDB
+      oracle.oci.oci_database_database:
+        compartment_id: "{{ exacs_compartment_id }}"
+        db_home_id: "{{ exacs_cdb_db_home_matches[0].id }}"
+        source: NONE
+        database:
+          admin_password: "{{ exacs_cdb_admin_password }}"
+          db_name: "{{ exacs_cdb_db_name }}"
+          db_unique_name: "{{ exacs_cdb_db_unique_name | default(omit, true) }}"
+          pdb_name: "{{ exacs_cdb_initial_pdb_name }}"
+          character_set: "{{ exacs_cdb_character_set | default('AL32UTF8') }}"
+          ncharacter_set: "{{ exacs_cdb_ncharacter_set | default('AL16UTF16') }}"
+          db_backup_config:
+            auto_backup_enabled: "{{ exacs_cdb_auto_backup_enabled | default(false) }}"
+          freeform_tags: "{{ exacs_resource_tags }}"
+        state: present
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_operation_wait_timeout | default(7200) }}"
+      register: exacs_cdb_create_result
+      no_log: true
+
+    # OCI copies the CDB tags onto the PDB it creates alongside it, so the
+    # initial PDB would otherwise carry the CDB resource key and two resources
+    # would share one key. Give it its own.
+    - name: List the PDBs of the created CDB
+      oracle.oci.oci_database_pluggable_database_facts:
+        database_id: "{{ exacs_cdb_create_result.database.id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_cdb_initial_pdb_inventory
+      check_mode: false
+
+    - name: Give the initial PDB its own ownership key
+      oracle.oci.oci_database_pluggable_database:
+        pluggable_database_id: >-
+          {{ exacs_cdb_initial_pdb_inventory.pluggable_databases
+             | selectattr('pdb_name', 'equalto', exacs_cdb_initial_pdb_name)
+             | map(attribute='id') | first }}
+        freeform_tags: "{{ exacs_cdb_initial_pdb_tags }}"
+        state: present
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_operation_wait_timeout | default(7200) }}"
+
+  rescue:
+    - name: Report why the CDB creation failed
+      ansible.builtin.fail:
+        msg: >-
+          Creating CDB {{ exacs_cdb_db_name }} failed:
+          {{ exacs_cdb_create_result.msg | default('no error text returned') }}

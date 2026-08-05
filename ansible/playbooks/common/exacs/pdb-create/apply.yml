@@ -1,0 +1,30 @@
+---
+# The create task carries the administrator password, so it is censored. The
+# rescue reports only the API error text, which never contains the password,
+# so a failure stays diagnosable.
+- name: Create the approved PDB
+  block:
+    # The module lists existing pluggable databases to stay idempotent, and
+    # that listing needs the compartment as well as the container database.
+    - name: Create the PDB
+      oracle.oci.oci_database_pluggable_database:
+        compartment_id: "{{ exacs_compartment_id }}"
+        container_database_id: "{{ exacs_pdb_cdb_matches[0].id }}"
+        pdb_name: "{{ exacs_pdb_name }}"
+        pdb_admin_password: "{{ exacs_pdb_admin_password }}"
+        # The existing TDE wallet password of the parent CDB. OCI rejects the
+        # creation without it.
+        tde_wallet_password: "{{ exacs_pdb_tde_wallet_password }}"
+        freeform_tags: "{{ exacs_resource_tags }}"
+        state: present
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_operation_wait_timeout | default(7200) }}"
+      register: exacs_pdb_create_result
+      no_log: true
+  rescue:
+    - name: Report why the PDB creation failed
+      ansible.builtin.fail:
+        msg: >-
+          Creating PDB {{ exacs_pdb_name }} failed:
+          {{ exacs_pdb_create_result.msg | default('no error text returned') }}

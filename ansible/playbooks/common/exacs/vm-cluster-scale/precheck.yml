@@ -1,0 +1,57 @@
+---
+- name: Read the Cloud VM Cluster before scaling
+  oracle.oci.oci_database_cloud_vm_cluster_facts:
+    cloud_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_vm_cluster_state
+  check_mode: false
+
+- name: Validate the approved Cloud VM Cluster scale boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_vm_cluster_state.cloud_vm_clusters | length == 1
+      - exacs_vm_cluster_state.cloud_vm_clusters[0].id == exacs_vm_cluster_id
+      - exacs_vm_cluster_state.cloud_vm_clusters[0].display_name == exacs_vm_cluster_display_name
+      - exacs_vm_cluster_state.cloud_vm_clusters[0].compartment_id == exacs_vm_cluster_compartment_id
+      - exacs_vm_cluster_state.cloud_vm_clusters[0].lifecycle_state == 'AVAILABLE'
+      - exacs_vm_cluster_state.cloud_vm_clusters[0].cpu_core_count == exacs_vm_cluster_source_cpu_core_count
+      # Either direction is allowed, because reducing capacity is as much a Day
+      # 2 operation as adding it. What is not allowed is a target equal to the
+      # source, which would be a no-op dressed up as a change.
+      - exacs_vm_cluster_target_cpu_core_count != exacs_vm_cluster_source_cpu_core_count
+      - exacs_vm_cluster_target_cpu_core_count >= 0
+    fail_msg: >-
+      The VM Cluster does not match the approved identity, compartment, display
+      name, or lifecycle state, or its observed core count is not the declared
+      source, or the target equals the source, or the target is negative.
+  check_mode: false
+
+# Reducing capacity is legal but not free of consequence, so the operator sees
+# it named before approving the run rather than discovering it afterwards.
+# Two separate tasks rather than one message with a condition inside it: the
+# conditions live in when:, where they are easy to read and easy to change.
+- name: Warn that this run reduces capacity
+  ansible.builtin.debug:
+    msg: >-
+      This run REDUCES the cluster from
+      {{ exacs_vm_cluster_source_cpu_core_count }} to
+      {{ exacs_vm_cluster_target_cpu_core_count }} OCPU. Confirm the remaining
+      capacity is enough for the databases running on this cluster.
+  when: exacs_vm_cluster_target_cpu_core_count | int
+        < exacs_vm_cluster_source_cpu_core_count | int
+
+- name: Warn that a target of zero stops every database on the cluster
+  ansible.builtin.debug:
+    msg: >-
+      A target of 0 OCPU leaves every database on this cluster without CPU.
+      They stop serving connections until the cluster is scaled up again.
+  when: exacs_vm_cluster_target_cpu_core_count | int == 0
+
+- name: Report observed Cloud VM Cluster capacity
+  ansible.builtin.debug:
+    msg:
+      display_name: "{{ exacs_vm_cluster_state.cloud_vm_clusters[0].display_name }}"
+      cpu_core_count: "{{ exacs_vm_cluster_state.cloud_vm_clusters[0].cpu_core_count }}"
+      lifecycle_state: "{{ exacs_vm_cluster_state.cloud_vm_clusters[0].lifecycle_state }}"
+      requested_cpu_core_count: "{{ exacs_vm_cluster_target_cpu_core_count }}"

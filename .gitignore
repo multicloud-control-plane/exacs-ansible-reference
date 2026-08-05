@@ -1,0 +1,22 @@
+crash.log
+*.pem
+*.key
+.venv/
+__pycache__/
+
+# Internal working documents. They are kept locally but not published: the
+# validation record describes the lab environment, the workshop runbook is
+# a facilitator script, and the FAQ is prep notes for live Q&A — none of them
+# are part of the deliverable.
+/docs/validation-plan.md
+/docs/workshop-runbook.md
+/docs/workshop-faq.md
+
+# Completed operation manifests carry real OCIDs and must never reach GitHub.
+# Only the fictional examples (either format) and the collection pin are
+# tracked.
+/ansible/*.yml
+/ansible/*.json
+!/ansible/*.example.yml
+!/ansible/*.example.json
+!/ansible/requirements.yml

@@ -1,0 +1,10 @@
+{
+  "_notes": [
+    "This read-only manifest is the evidence view. It does not persist an OCID",
+    "registry; it queries OCI every time and reports resources it owns by tags."
+  ],
+  "exacs_project": "customer-demo",
+  "exacs_environment": "nonprod",
+  "exacs_compartment_id": "ocid1.compartment.oc1..exampleuniqueID",
+  "exacs_vm_cluster_id": "ocid1.cloudvmcluster.oc1.uk-london-1.exampleuniqueID"
+}

@@ -1,0 +1,19 @@
+---
+# Copy this file to run-datapatch.yml. The CDB is resolved from OCI facts
+# through the same ownership tags as every other operation.
+#
+# This operation exists because OCI exposes RunDataPatch in its API and CLI,
+# but oracle.oci 5.5.0 has no module for it. See docs/day2-operations.md.
+operation_execution_mode: precheck
+exacs_project: customer-demo
+exacs_environment: nonprod
+exacs_datapatch_compartment_id: ocid1.compartment.oc1..example
+exacs_datapatch_vm_cluster_id: ocid1.cloudvmcluster.oc1.uk-london-1.example
+
+exacs_datapatch_database_name: EXACREF
+exacs_datapatch_database_key: exacref_cdb
+# Leave empty to run datapatch on the CDB only. List PDB resource keys to
+# include them, in the order they should be patched.
+exacs_datapatch_pluggable_database_keys: []
+exacs_datapatch_skip_closed_pdbs: true
+exacs_datapatch_timeout_seconds: 10800

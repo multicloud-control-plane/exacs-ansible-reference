@@ -1,0 +1,42 @@
+---
+# Identity comes from the shared resolvers, exactly as it does for the
+# API-based operations. Only the mutating call uses the OCI CLI.
+- name: Resolve the source Database Home by automation key
+  ansible.builtin.import_tasks: ../resolve/db-home-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_move_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_move_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_move_source_db_home_key }}"
+
+- name: Bind the resolved source Database Home
+  ansible.builtin.set_fact:
+    exacs_move_source_db_home: "{{ exacs_resolve_db_home }}"
+  check_mode: false
+
+- name: Resolve the target Database Home by automation key
+  ansible.builtin.import_tasks: ../resolve/db-home-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_move_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_move_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_move_target_db_home_key }}"
+
+- name: Bind the resolved target Database Home
+  ansible.builtin.set_fact:
+    exacs_move_target_db_home: "{{ exacs_resolve_db_home }}"
+  check_mode: false
+
+- name: Resolve the CDB by automation key
+  ansible.builtin.import_tasks: ../resolve/cdb-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_move_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_move_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_move_database_key }}"
+    exacs_resolve_db_name: "{{ exacs_move_database_name }}"
+
+- name: Bind the resolved OCIDs for this operation
+  ansible.builtin.set_fact:
+    exacs_move_database_id: "{{ exacs_resolve_cdb.id }}"
+  check_mode: false
+
+- name: Build the OCI CLI authentication arguments
+  ansible.builtin.import_tasks: ../host/oci-cli-auth.yml

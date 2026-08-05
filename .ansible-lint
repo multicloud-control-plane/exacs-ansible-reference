@@ -1,0 +1,12 @@
+---
+# Static quality checks for the operation playbooks.
+#
+#   pip install ansible-lint
+#   ansible-lint ansible/
+#
+# This complements the --syntax-check runs described in docs/getting-started.md.
+# Neither proves an operation works against OCI; see docs/validation-plan.md.
+
+exclude_paths:
+  - .venv/
+  - .git/

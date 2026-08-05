@@ -1,0 +1,40 @@
+---
+# The stop and start are two separate OCI calls. If the start does not
+# complete, the DB node is left stopped, so the failure path must say so
+# rather than only reporting a failed task.
+- name: Restart the approved DB node
+  block:
+    - name: Stop the approved DB node
+      oracle.oci.oci_database_db_node_actions:
+        db_node_id: "{{ exacs_db_node_id }}"
+        action: stop
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_db_node_timeout_seconds }}"
+
+    - name: Start the approved DB node
+      oracle.oci.oci_database_db_node_actions:
+        db_node_id: "{{ exacs_db_node_id }}"
+        action: start
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_db_node_timeout_seconds }}"
+
+  rescue:
+    - name: Read the observed DB node state after the incomplete restart
+      oracle.oci.oci_database_db_node_facts:
+        db_node_id: "{{ exacs_db_node_id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_db_node_incomplete_state
+      ignore_errors: true
+      check_mode: false
+
+    - name: Fail with the state the DB node was left in
+      ansible.builtin.fail:
+        msg: >-
+          The restart of the approved DB node did not complete. The stop may
+          have succeeded while the start did not, which leaves one node of the
+          VM Cluster down. Observed lifecycle state:
+          {{ exacs_db_node_incomplete_state.db_nodes[0].lifecycle_state | default('could not be read') }}.
+          Confirm the node state in the OCI console and start it before
+          returning the environment to service.

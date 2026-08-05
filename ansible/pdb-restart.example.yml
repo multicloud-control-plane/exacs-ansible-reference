@@ -1,0 +1,12 @@
+---
+# Copy this file to pdb-restart.yml. OCI facts resolve the PDB and CDB IDs
+# using these approved business identifiers and resource ownership tags.
+operation_execution_mode: precheck
+exacs_project: customer-demo
+exacs_environment: nonprod
+exacs_pdb_name: REFPDB
+exacs_pdb_key: ref_pdb
+exacs_pdb_cdb_name: REFCDB
+exacs_pdb_cdb_key: ref_cdb
+exacs_pdb_compartment_id: ocid1.compartment.oc1..example
+exacs_pdb_timeout_seconds: 1800

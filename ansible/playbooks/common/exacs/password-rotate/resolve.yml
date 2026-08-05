@@ -1,0 +1,15 @@
+---
+# Every identity comes from the shared resolvers, so this operation carries no
+# resolution logic of its own.
+- name: Resolve the CDB by automation key
+  ansible.builtin.import_tasks: ../resolve/cdb-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_rotate_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_rotate_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_rotate_database_key }}"
+    exacs_resolve_db_name: "{{ exacs_rotate_database_name }}"
+
+- name: Bind the resolved CDB for this operation
+  ansible.builtin.set_fact:
+    exacs_rotate_database_id: "{{ exacs_resolve_cdb.id }}"
+  check_mode: false

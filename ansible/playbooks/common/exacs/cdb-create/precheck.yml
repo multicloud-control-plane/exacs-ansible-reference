@@ -1,0 +1,59 @@
+---
+- name: Resolve the target Database Home by automation key
+  ansible.builtin.import_tasks: ../resolve/db-home-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_cdb_db_home_key }}"
+
+- name: Bind the resolved Database Home for this operation
+  ansible.builtin.set_fact:
+    exacs_cdb_db_home_matches: ["{{ exacs_resolve_db_home }}"]
+  check_mode: false
+
+# Both scopes are required: the module rejects a call without
+# compartment_id, and the service rejects one without db_home_id.
+- name: List databases in the resolved Database Home
+  oracle.oci.oci_database_database_facts:
+    compartment_id: "{{ exacs_compartment_id }}"
+    db_home_id: "{{ exacs_cdb_db_home_matches[0].id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_cdb_inventory
+  check_mode: false
+
+# Read the first condition as one sentence: of the databases in this Database
+# Home, keep the ones that carry ownership tags, then the ones belonging to this
+# project, this environment and this resource key, and require that none is
+# left. In other words, nothing this operation would create exists yet. The
+# shared resolvers are not used here because they assert that exactly one
+# resource matches, and a creation needs the opposite.
+- name: Validate the approved CDB creation boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - >-
+        exacs_cdb_inventory.databases
+        | selectattr('freeform_tags.exacs_project', 'defined')
+        | selectattr('freeform_tags.exacs_project', 'equalto', exacs_project)
+        | selectattr('freeform_tags.exacs_environment', 'equalto', exacs_environment)
+        | selectattr('freeform_tags.exacs_resource_key', 'equalto', exacs_cdb_key)
+        | list | length == 0
+      - exacs_cdb_inventory.databases | selectattr('db_name', 'equalto', exacs_cdb_db_name) | list | length == 0
+      - exacs_cdb_admin_password | length > 0
+    fail_msg: The CDB already exists in the target Database Home, or its administrator password is unavailable.
+  # Not no_log: assert reports the literal text of a failed expression, never
+  # its evaluated value, so the password cannot leak here. Suppressing output
+  # would only hide fail_msg and leave the customer without a reason.
+  check_mode: false
+
+- name: Report the approved CDB creation target
+  ansible.builtin.debug:
+    msg:
+      target_db_home:
+        display_name: "{{ exacs_cdb_db_home_matches[0].display_name }}"
+        db_version: "{{ exacs_cdb_db_home_matches[0].db_version }}"
+        lifecycle_state: "{{ exacs_cdb_db_home_matches[0].lifecycle_state }}"
+      cdb_to_create:
+        resource_key: "{{ exacs_cdb_key }}"
+        db_name: "{{ exacs_cdb_db_name }}"
+        initial_pdb_name: "{{ exacs_cdb_initial_pdb_name }}"

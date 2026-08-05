@@ -1,0 +1,34 @@
+---
+- name: Read the database after the out-of-place patch
+  oracle.oci.oci_database_database_facts:
+    database_id: "{{ exacs_patch_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_patch_post_database_state
+  check_mode: false
+
+- name: Read the target Database Home after the patch
+  oracle.oci.oci_database_db_home_facts:
+    db_home_id: "{{ exacs_patch_target_db_home_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_patch_post_db_home_state
+  check_mode: false
+
+- name: Assert the out-of-place patch completed at the requested target
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_patch_post_database_state.databases | length == 1
+      - exacs_patch_post_database_state.databases[0].lifecycle_state == 'AVAILABLE'
+      - exacs_patch_post_database_state.databases[0].db_home_id == exacs_patch_target_db_home_id
+      - exacs_patch_post_db_home_state.db_homes | length == 1
+      - exacs_patch_post_db_home_state.db_homes[0].db_version == exacs_patch_target_db_version
+      - exacs_patch_post_db_home_state.db_homes[0].lifecycle_state == 'AVAILABLE'
+    fail_msg: The patch completed without leaving the CDB in the approved target Database Home and version.
+  check_mode: false
+
+- name: Report final out-of-place patch state
+  ansible.builtin.debug:
+    msg:
+      database_after_patch: "{{ exacs_patch_post_database_state.databases[0].db_home_id }}"
+      db_version: "{{ exacs_patch_post_db_home_state.db_homes[0].db_version }}"
+      lifecycle_state: "{{ exacs_patch_post_database_state.databases[0].lifecycle_state }}"

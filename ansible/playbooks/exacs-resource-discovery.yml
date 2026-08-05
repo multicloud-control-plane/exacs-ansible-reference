@@ -1,0 +1,15 @@
+---
+- name: ExaCS Resource Discovery
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - "{{ operation_file }}"
+  vars:
+    exacs_auth_type: "{{ lookup('ansible.builtin.env', 'OCI_ANSIBLE_AUTH_TYPE') | default('instance_principal', true) }}"
+  tasks:
+    - name: Read the owned resources from OCI
+      ansible.builtin.import_tasks: common/exacs/resource-discovery/read.yml
+
+    - name: Report the discovered resources
+      ansible.builtin.import_tasks: common/exacs/resource-discovery/report.yml

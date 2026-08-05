@@ -1,0 +1,27 @@
+---
+- name: Read the CDB after the move
+  oracle.oci.oci_database_database_facts:
+    database_id: "{{ exacs_move_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_move_post_database_state
+  check_mode: false
+
+- name: Assert the CDB now runs from the target Database Home
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_move_post_database_state.databases | length == 1
+      - exacs_move_post_database_state.databases[0].lifecycle_state == 'AVAILABLE'
+      - exacs_move_post_database_state.databases[0].db_home_id == exacs_move_target_db_home.id
+    fail_msg: The move completed without leaving the CDB in the approved target Database Home.
+  check_mode: false
+
+- name: Report the final state after the move
+  ansible.builtin.debug:
+    msg:
+      db_name: "{{ exacs_move_post_database_state.databases[0].db_name }}"
+      database_home: "{{ exacs_move_target_db_home.display_name }}"
+      db_version: "{{ exacs_move_target_db_home.db_version }}"
+      lifecycle_state: "{{ exacs_move_post_database_state.databases[0].lifecycle_state }}"
+      datapatch: >-
+        NOT applied. Run exacs-database-run-datapatch to complete the patch.

@@ -1,0 +1,36 @@
+---
+- name: Read the DB node before restart
+  oracle.oci.oci_database_db_node_facts:
+    db_node_id: "{{ exacs_db_node_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_db_node_state
+  check_mode: false
+
+- name: List approved VM Cluster DB nodes
+  oracle.oci.oci_database_db_node_facts:
+    compartment_id: "{{ exacs_db_node_compartment_id }}"
+    vm_cluster_id: "{{ exacs_db_node_vm_cluster_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_db_node_vm_cluster_state
+  check_mode: false
+
+- name: Validate the approved DB node restart boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_db_node_state.db_nodes | length == 1
+      - exacs_db_node_state.db_nodes[0].id == exacs_db_node_id
+      - exacs_db_node_vm_cluster_state.db_nodes | selectattr('id', 'equalto', exacs_db_node_id) | list | length == 1
+      - exacs_db_node_state.db_nodes[0].lifecycle_state == 'AVAILABLE'
+    fail_msg: >-
+      The DB node is not uniquely resolved, is not a member of the approved
+      VM Cluster listing, or is not AVAILABLE. That listing is already scoped
+      to the approved compartment.
+  check_mode: false
+
+- name: Report observed DB node state
+  ansible.builtin.debug:
+    msg:
+      db_node_id: "{{ exacs_db_node_state.db_nodes[0].id }}"
+      approved_vm_cluster_id: "{{ exacs_db_node_vm_cluster_id }}"
+      lifecycle_state: "{{ exacs_db_node_state.db_nodes[0].lifecycle_state }}"

@@ -1,0 +1,51 @@
+---
+# The OCI API has no operation that starts or stops a container database, so
+# this is the one case in this repository where the change is made on the
+# host. The evidence gate does not change: verify.yml still reads the result
+# back through the OCI API.
+- name: Bounce the approved CDB
+  block:
+    - name: Run dbaascli database bounce on the node
+      ansible.builtin.import_tasks: ../host/run-dbaascli.yml
+      vars:
+        exacs_host_node_address: "{{ exacs_bounce_node_address }}"
+        exacs_host_ssh_user: "{{ exacs_bounce_ssh_user | default('opc') }}"
+        exacs_host_ssh_private_key: "{{ exacs_bounce_ssh_private_key }}"
+        exacs_host_bastion_address: "{{ exacs_bounce_bastion_address | default('', true) }}"
+        exacs_host_bastion_user: "{{ exacs_bounce_bastion_user | default('opc') }}"
+        exacs_host_dbaascli_user: oracle
+        exacs_host_changed: true
+        exacs_host_dbaascli_argv:
+          - database
+          - bounce
+          - --dbname
+          - "{{ exacs_bounce_database_name }}"
+
+    - name: Require the bounce to have succeeded
+      ansible.builtin.assert:
+        quiet: true
+        that:
+          - exacs_host_dbaascli_result.rc == 0
+        fail_msg: >-
+          dbaascli database bounce failed on node
+          {{ exacs_bounce_node_address }}:
+          {{ exacs_host_dbaascli_result.stderr | default('no error text returned') | trim }}
+
+  rescue:
+    - name: Read the observed CDB state after the incomplete bounce
+      oracle.oci.oci_database_database_facts:
+        database_id: "{{ exacs_bounce_database_id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_bounce_incomplete_state
+      ignore_errors: true
+      check_mode: false
+
+    - name: Fail with the state the CDB was left in
+      ansible.builtin.fail:
+        msg: >-
+          The bounce of CDB {{ exacs_bounce_database_name }} did not complete:
+          {{ exacs_host_dbaascli_result.stderr | default('no error text returned') | trim }}.
+          Observed lifecycle state:
+          {{ exacs_bounce_incomplete_state.databases[0].lifecycle_state | default('could not be read') }}.
+          The database may be down. Confirm its state and start it before
+          returning the environment to service.

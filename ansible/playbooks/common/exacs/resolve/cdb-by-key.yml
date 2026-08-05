@@ -1,0 +1,69 @@
+---
+# Shared helper: resolve exactly one CDB from its ownership tags.
+#
+# The caller sets every input as an exacs_resolve_* var, so no operation
+# specific name appears here and any operation can reuse it:
+#   exacs_resolve_compartment_id, exacs_resolve_key, exacs_resolve_db_name
+#   exacs_resolve_vm_cluster_id  (optional: narrows the search to one cluster)
+#
+# It leaves the single match in exacs_resolve_cdb. Copy that into an
+# operation-scoped var immediately, because a second import overwrites it.
+- name: List Database Homes in the approved scope
+  oracle.oci.oci_database_db_home_facts:
+    compartment_id: "{{ exacs_resolve_compartment_id }}"
+    vm_cluster_id: "{{ exacs_resolve_vm_cluster_id | default(omit, true) }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_resolve_db_home_inventory
+  check_mode: false
+
+# OCI rejects a database listing scoped only to a compartment: it requires
+# dbHomeId or systemId. So read them one Database Home at a time.
+- name: List CDBs in each Database Home
+  oracle.oci.oci_database_database_facts:
+    compartment_id: "{{ exacs_resolve_compartment_id }}"
+    db_home_id: "{{ item.id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  loop: "{{ exacs_resolve_db_home_inventory.db_homes }}"
+  loop_control:
+    label: "{{ item.display_name }}"
+  register: exacs_resolve_database_results
+  check_mode: false
+
+# This expression is the identity model, so read it as one sentence: take the
+# databases found in every Database Home, flatten them into a single list, keep
+# the ones that carry ownership tags at all, then the ones belonging to this
+# project, this environment and this resource key. Whatever is left is what this
+# operation is allowed to act on, and the assertion below requires it to be
+# exactly one.
+#
+# The 'defined' step is not optional. Without it the expression fails as soon as
+# any resource in the compartment lacks the tag, which is normal in a shared
+# compartment.
+- name: Select the CDB owning the requested key
+  ansible.builtin.set_fact:
+    exacs_resolve_cdb_matches: >-
+      {{ exacs_resolve_database_results.results
+         | map(attribute='databases') | flatten
+         | selectattr('freeform_tags.exacs_project', 'defined')
+         | selectattr('freeform_tags.exacs_project', 'equalto', exacs_project)
+         | selectattr('freeform_tags.exacs_environment', 'equalto', exacs_environment)
+         | selectattr('freeform_tags.exacs_resource_key', 'equalto', exacs_resolve_key)
+         | list }}
+  check_mode: false
+
+- name: Validate the CDB resolution
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_resolve_cdb_matches | length == 1
+      - exacs_resolve_cdb_matches[0].db_name == exacs_resolve_db_name
+      - exacs_resolve_cdb_matches[0].lifecycle_state == 'AVAILABLE'
+    fail_msg: >-
+      No single available CDB owns resource key {{ exacs_resolve_key }} with
+      database name {{ exacs_resolve_db_name }} in this project and environment.
+  check_mode: false
+
+- name: Bind the resolved CDB
+  ansible.builtin.set_fact:
+    exacs_resolve_cdb: "{{ exacs_resolve_cdb_matches[0] }}"
+  check_mode: false

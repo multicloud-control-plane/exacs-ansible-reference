@@ -1,0 +1,29 @@
+---
+- name: Read the PDB before restart
+  oracle.oci.oci_database_pluggable_database_facts:
+    pluggable_database_id: "{{ exacs_pdb_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_pdb_state
+  check_mode: false
+
+- name: Validate the approved PDB restart boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_pdb_state.pluggable_databases | length == 1
+      - exacs_pdb_state.pluggable_databases[0].id == exacs_pdb_id
+      - exacs_pdb_state.pluggable_databases[0].pdb_name == exacs_pdb_name
+      - exacs_pdb_state.pluggable_databases[0].container_database_id == exacs_pdb_container_database_id
+      - exacs_pdb_state.pluggable_databases[0].compartment_id == exacs_pdb_compartment_id
+      - exacs_pdb_state.pluggable_databases[0].lifecycle_state == 'AVAILABLE'
+      - exacs_pdb_state.pluggable_databases[0].open_mode == 'READ_WRITE'
+    fail_msg: The PDB does not match the approved identity, CDB, compartment, lifecycle state, or open mode.
+  check_mode: false
+
+- name: Report observed PDB restart state
+  ansible.builtin.debug:
+    msg:
+      pdb_name: "{{ exacs_pdb_state.pluggable_databases[0].pdb_name }}"
+      container_database_id: "{{ exacs_pdb_state.pluggable_databases[0].container_database_id }}"
+      lifecycle_state: "{{ exacs_pdb_state.pluggable_databases[0].lifecycle_state }}"
+      open_mode: "{{ exacs_pdb_state.pluggable_databases[0].open_mode }}"

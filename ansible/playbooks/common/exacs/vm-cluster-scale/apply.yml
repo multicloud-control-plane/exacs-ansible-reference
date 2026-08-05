@@ -1,0 +1,37 @@
+---
+# A scale that does not complete can leave the VM Cluster mid-update, so the
+# failure path reports the capacity it was left with rather than only a failed
+# task.
+- name: Scale the approved Cloud VM Cluster
+  block:
+    - name: Set the approved CPU core count
+      oracle.oci.oci_database_cloud_vm_cluster:
+        cloud_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+        cpu_core_count: "{{ exacs_vm_cluster_target_cpu_core_count }}"
+        state: present
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_vm_cluster_timeout_seconds }}"
+      register: exacs_vm_cluster_scale_result
+
+  rescue:
+    - name: Read the observed Cloud VM Cluster state after the incomplete scale
+      oracle.oci.oci_database_cloud_vm_cluster_facts:
+        cloud_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_vm_cluster_incomplete_state
+      ignore_errors: true
+      check_mode: false
+
+    - name: Fail with the capacity the VM Cluster was left with
+      ansible.builtin.fail:
+        msg: >-
+          Scaling VM Cluster {{ exacs_vm_cluster_display_name }} to
+          {{ exacs_vm_cluster_target_cpu_core_count }} OCPU did not complete:
+          {{ exacs_vm_cluster_scale_result.msg | default('no error text returned') }}.
+          Observed CPU core count:
+          {{ exacs_vm_cluster_incomplete_state.cloud_vm_clusters[0].cpu_core_count | default('could not be read') }},
+          lifecycle state:
+          {{ exacs_vm_cluster_incomplete_state.cloud_vm_clusters[0].lifecycle_state | default('could not be read') }}.
+          Confirm the capacity in the OCI console before rerunning, because the
+          precheck requires the declared source capacity to match reality.

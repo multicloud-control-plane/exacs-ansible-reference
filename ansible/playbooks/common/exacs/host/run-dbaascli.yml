@@ -1,0 +1,57 @@
+---
+# Shared helper: run one dbaascli command on a database node.
+#
+# This is the template for any operation OCI does not expose through its API
+# at all. Copy the calling pattern and change exacs_host_dbaascli_argv; the
+# rest of an operation, including identity resolution and the evidence gate,
+# stays exactly as it is for the API-based operations.
+#
+# The caller sets every input as an exacs_host_* var:
+#   exacs_host_node_address       IP or name of the node to run on
+#   exacs_host_dbaascli_argv      list of arguments placed after "dbaascli"
+#   exacs_host_ssh_user           SSH user, defaults to opc
+#   exacs_host_ssh_private_key    path to the private key
+#   exacs_host_bastion_address    optional jump host, see below
+#   exacs_host_bastion_user       SSH user on the jump host, defaults to opc
+#   exacs_host_dbaascli_user      OS user to run as, defaults to oracle
+#   exacs_host_changed            whether a success counts as a change
+#
+# It leaves the finished command in exacs_host_dbaascli_result. Read
+# .stdout for output and .rc for the exit code.
+#
+# A VM Cluster subnet normally forbids public IPs, so a runner outside that
+# subnet reaches the nodes through a jump host. Set exacs_host_bastion_address
+# and the connection is proxied; leave it unset when the runner is already
+# inside the VCN.
+- name: Register the database node as a delegation target
+  ansible.builtin.add_host:
+    name: "{{ exacs_host_node_address }}"
+    groups: exacs_database_nodes
+    ansible_host: "{{ exacs_host_node_address }}"
+    ansible_user: "{{ exacs_host_ssh_user | default('opc') }}"
+    ansible_ssh_private_key_file: "{{ exacs_host_ssh_private_key }}"
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_common_args: >-
+      {{ ('-o ProxyJump='
+          ~ (exacs_host_bastion_user | default('opc'))
+          ~ '@' ~ exacs_host_bastion_address)
+         if exacs_host_bastion_address | default('', true) | length > 0
+         else '' }}
+  changed_when: false
+  check_mode: false
+
+# dbaascli lives on the node, so this runs there rather than on the runner.
+# Most subcommands need root; database bounce needs the oracle user, so the
+# account is an input rather than a constant.
+- name: Run the dbaascli command on the database node
+  ansible.builtin.command:
+    argv: >-
+      {{ ['sudo', '-u', exacs_host_dbaascli_user | default('oracle'), 'dbaascli']
+         + exacs_host_dbaascli_argv }}
+  delegate_to: "{{ exacs_host_node_address }}"
+  register: exacs_host_dbaascli_result
+  changed_when: exacs_host_changed | default(false) | bool
+  # The caller decides what a non-zero exit means, so it can report the
+  # reason in customer terms instead of leaking a raw command dump.
+  failed_when: false
+  check_mode: false

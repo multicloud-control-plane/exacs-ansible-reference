@@ -1,0 +1,23 @@
+---
+- name: Read the DB node after restart
+  oracle.oci.oci_database_db_node_facts:
+    db_node_id: "{{ exacs_db_node_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_db_node_post_state
+  check_mode: false
+
+- name: Assert the DB node restart completed
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_db_node_post_state.db_nodes | length == 1
+      - exacs_db_node_post_state.db_nodes[0].id == exacs_db_node_id
+      - exacs_db_node_post_state.db_nodes[0].lifecycle_state == 'AVAILABLE'
+    fail_msg: The DB node did not return to AVAILABLE after the restart.
+  check_mode: false
+
+- name: Report final DB node state
+  ansible.builtin.debug:
+    msg:
+      db_node_id: "{{ exacs_db_node_post_state.db_nodes[0].id }}"
+      lifecycle_state: "{{ exacs_db_node_post_state.db_nodes[0].lifecycle_state }}"

@@ -1,0 +1,47 @@
+---
+# A Database Home creation that does not complete can leave a home behind in a
+# failed state, which would then block a rerun on the same display name, so the
+# failure path reports the state rather than only a failed task.
+- name: Create the approved Database Home
+  block:
+    # compartment_id is not part of the create payload, but the module lists
+    # existing Database Homes to stay idempotent, and that listing needs it.
+    - name: Create the Database Home
+      oracle.oci.oci_database_db_home:
+        compartment_id: "{{ exacs_compartment_id }}"
+        source: VM_CLUSTER_NEW
+        vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+        display_name: "{{ exacs_db_home_display_name }}"
+        db_version: "{{ exacs_db_home_db_version }}"
+        freeform_tags: "{{ exacs_resource_tags }}"
+        database_software_image_id: "{{ exacs_db_home_software_image_matches[0].id | default(omit, true) }}"
+        is_desupported_version: "{{ exacs_db_home_is_desupported_version | default(false) }}"
+        state: present
+        auth_type: "{{ exacs_auth_type }}"
+        wait: true
+        wait_timeout: "{{ exacs_db_home_timeout_seconds }}"
+      register: exacs_db_home_create_result
+
+  rescue:
+    - name: Read the observed Database Homes after the incomplete creation
+      oracle.oci.oci_database_db_home_facts:
+        compartment_id: "{{ exacs_compartment_id }}"
+        vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+        auth_type: "{{ exacs_auth_type }}"
+      register: exacs_db_home_incomplete_state
+      ignore_errors: true
+      check_mode: false
+
+    - name: Fail with the state the Database Home was left in
+      ansible.builtin.fail:
+        msg: >-
+          Creating Database Home {{ exacs_db_home_display_name }} did not
+          complete:
+          {{ exacs_db_home_create_result.msg | default('no error text returned') }}.
+          Observed lifecycle state:
+          {{ exacs_db_home_incomplete_state.db_homes | default([])
+             | selectattr('freeform_tags.exacs_resource_key', 'defined')
+             | selectattr('freeform_tags.exacs_resource_key', 'equalto', exacs_db_home_key)
+             | map(attribute='lifecycle_state') | first | default('not present') }}.
+          Remove any failed Database Home owning key {{ exacs_db_home_key }}
+          before rerunning, because the precheck requires the key to be unused.

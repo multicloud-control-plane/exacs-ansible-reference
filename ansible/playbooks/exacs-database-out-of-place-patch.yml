@@ -1,0 +1,31 @@
+---
+- name: ExaCS Database Out-of-Place Patch
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ operation_file }}"
+
+  vars:
+    exacs_auth_type: >-
+      {{ lookup('ansible.builtin.env', 'OCI_ANSIBLE_AUTH_TYPE') | default('instance_principal', true) }}
+
+  pre_tasks:
+    - name: Require an explicit execution mode
+      ansible.builtin.import_tasks: common/exacs/operation/require-execution-mode.yml
+
+  tasks:
+    - name: Resolve the approved resource identities
+      ansible.builtin.import_tasks: common/exacs/out-of-place-patch/resolve.yml
+
+    - name: Precheck the out-of-place patch
+      ansible.builtin.import_tasks: common/exacs/out-of-place-patch/precheck.yml
+
+    - name: Apply the approved out-of-place patch
+      ansible.builtin.import_tasks: common/exacs/out-of-place-patch/apply.yml
+      when: operation_execution_mode == 'execute'
+
+    - name: Verify the out-of-place patch
+      ansible.builtin.import_tasks: common/exacs/out-of-place-patch/verify.yml
+      when: operation_execution_mode == 'execute'

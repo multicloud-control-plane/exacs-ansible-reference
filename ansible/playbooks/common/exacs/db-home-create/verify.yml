@@ -1,0 +1,30 @@
+---
+# Verification reuses the shared resolver rather than repeating its tag filter.
+# The resolver already reads OCI, keeps only the resources this project owns,
+# and refuses to continue unless exactly one is available, which is what
+# verifying a creation means: the new Database Home must now be findable, and
+# findable only once.
+- name: Resolve the created Database Home by automation key
+  ansible.builtin.import_tasks: ../resolve/db-home-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_db_home_key }}"
+
+- name: Assert the Database Home creation completed
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_resolve_db_home.display_name == exacs_db_home_display_name
+      - exacs_resolve_db_home.db_version == exacs_db_home_db_version
+    fail_msg: >-
+      The created Database Home does not match the approved name or version.
+  check_mode: false
+
+- name: Report the created Database Home
+  ansible.builtin.debug:
+    msg:
+      display_name: "{{ exacs_resolve_db_home.display_name }}"
+      db_home_id: "{{ exacs_resolve_db_home.id }}"
+      resource_key: "{{ exacs_db_home_key }}"
+      lifecycle_state: "{{ exacs_resolve_db_home.lifecycle_state }}"

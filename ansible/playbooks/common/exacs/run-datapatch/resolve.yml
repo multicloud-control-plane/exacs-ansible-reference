@@ -1,0 +1,56 @@
+---
+# Identity resolution is the shared helper every operation uses. Only the
+# mutating call differs, because the collection has no module for RunDataPatch.
+- name: Resolve the CDB by automation key
+  ansible.builtin.import_tasks: ../resolve/cdb-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_datapatch_compartment_id }}"
+    exacs_resolve_vm_cluster_id: "{{ exacs_datapatch_vm_cluster_id }}"
+    exacs_resolve_key: "{{ exacs_datapatch_database_key }}"
+    exacs_resolve_db_name: "{{ exacs_datapatch_database_name }}"
+
+- name: Bind the resolved CDB for this operation
+  ansible.builtin.set_fact:
+    exacs_datapatch_database_id: "{{ exacs_resolve_cdb.id }}"
+  check_mode: false
+
+- name: List PDBs of the resolved CDB
+  oracle.oci.oci_database_pluggable_database_facts:
+    database_id: "{{ exacs_datapatch_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_datapatch_pdb_inventory
+  check_mode: false
+
+- name: Resolve the requested PDBs by automation key
+  ansible.builtin.set_fact:
+    exacs_datapatch_pdb_matches: >-
+      {{ exacs_datapatch_pdb_inventory.pluggable_databases
+         | selectattr('freeform_tags.exacs_resource_key', 'defined')
+         | selectattr('freeform_tags.exacs_resource_key', 'in', exacs_datapatch_pluggable_database_keys)
+         | list }}
+  check_mode: false
+
+- name: Validate the PDB resolution
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_datapatch_pdb_matches | length == exacs_datapatch_pluggable_database_keys | length
+    fail_msg: >-
+      Not every requested pluggable database resource key resolves to exactly
+      one PDB inside CDB {{ exacs_datapatch_database_name }}.
+  check_mode: false
+
+- name: Build the OCI CLI authentication arguments
+  ansible.builtin.import_tasks: ../host/oci-cli-auth.yml
+
+# Both are CLI complex types, so they are passed as JSON. The PDB list is
+# omitted entirely when empty, because the CLI rejects an empty list.
+- name: Build the OCI CLI datapatch arguments
+  ansible.builtin.set_fact:
+    exacs_datapatch_cli_pdb_args: >-
+      {{ ['--pluggable-databases', exacs_datapatch_pdb_matches | map(attribute='id') | list | to_json]
+         if exacs_datapatch_pdb_matches | length > 0 else [] }}
+    exacs_datapatch_cli_options_args: >-
+      {{ ['--data-patch-options',
+          {'shouldSkipClosedPdbs': exacs_datapatch_skip_closed_pdbs | bool} | to_json] }}
+  check_mode: false

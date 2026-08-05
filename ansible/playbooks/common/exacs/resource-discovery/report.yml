@@ -1,0 +1,11 @@
+---
+- name: Report the observed Cloud VM Cluster, Database Homes, CDBs, and PDBs
+  ansible.builtin.debug:
+    msg:
+      cloud_vm_cluster:
+        display_name: "{{ exacs_discovery_vm_cluster.display_name }}"
+        cpu_core_count: "{{ exacs_discovery_vm_cluster.cpu_core_count }}"
+        lifecycle_state: "{{ exacs_discovery_vm_cluster.lifecycle_state }}"
+      database_homes: "{{ exacs_discovery_db_homes }}"
+      databases: "{{ exacs_discovery_cdbs }}"
+      pluggable_databases: "{{ exacs_discovery_pdbs }}"

@@ -1,0 +1,57 @@
+---
+- name: Resolve the CDB by automation key
+  ansible.builtin.import_tasks: ../resolve/cdb-by-key.yml
+  vars:
+    exacs_resolve_compartment_id: "{{ exacs_compartment_id }}"
+    exacs_resolve_key: "{{ exacs_pdb_cdb_key }}"
+    exacs_resolve_db_name: "{{ exacs_pdb_cdb_name }}"
+
+- name: Bind the resolved CDB for this operation
+  ansible.builtin.set_fact:
+    exacs_pdb_cdb_matches: ["{{ exacs_resolve_cdb }}"]
+  check_mode: false
+
+- name: List PDBs in the resolved CDB
+  oracle.oci.oci_database_pluggable_database_facts:
+    database_id: "{{ exacs_pdb_cdb_matches[0].id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_pdb_inventory
+  check_mode: false
+
+# Read the first condition as one sentence: of the PDBs in this CDB, keep the
+# ones that carry ownership tags, then the ones belonging to this project, this
+# environment and this resource key, and require that none is left. In other
+# words, nothing this operation would create exists yet. The shared resolvers
+# are not used here because they assert that exactly one resource matches, and
+# a creation needs the opposite.
+- name: Validate the approved PDB creation boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - >-
+        exacs_pdb_inventory.pluggable_databases
+        | selectattr('freeform_tags.exacs_project', 'defined')
+        | selectattr('freeform_tags.exacs_project', 'equalto', exacs_project)
+        | selectattr('freeform_tags.exacs_environment', 'equalto', exacs_environment)
+        | selectattr('freeform_tags.exacs_resource_key', 'equalto', exacs_pdb_key)
+        | list | length == 0
+      - exacs_pdb_inventory.pluggable_databases | selectattr('pdb_name', 'equalto', exacs_pdb_name) | list | length == 0
+      - exacs_pdb_admin_password | length > 0
+      - exacs_pdb_tde_wallet_password | length > 0
+    fail_msg: >-
+      The PDB already exists, or its administrator password or the TDE wallet
+      password of the parent CDB is unavailable in the runner environment.
+  # Not no_log: assert reports the literal text of a failed expression, never
+  # its evaluated value, so the password cannot leak here. Suppressing output
+  # would only hide fail_msg and leave the customer without a reason.
+  check_mode: false
+
+- name: Report the approved PDB creation target
+  ansible.builtin.debug:
+    msg:
+      target_cdb:
+        db_name: "{{ exacs_pdb_cdb_matches[0].db_name }}"
+        lifecycle_state: "{{ exacs_pdb_cdb_matches[0].lifecycle_state }}"
+      pdb_to_create:
+        resource_key: "{{ exacs_pdb_key }}"
+        pdb_name: "{{ exacs_pdb_name }}"

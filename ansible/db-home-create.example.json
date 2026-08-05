@@ -1,0 +1,22 @@
+{
+  "_notes": [
+    "Copy this file to db-home-create.json.",
+    "Replace fictional prerequisite OCIDs and names. Do not commit a completed file.",
+    "exacs_db_home_key is the stable identity. The display name is cosmetic: OCI",
+    "does not enforce it as unique, so it is never used to resolve the home.",
+    "exacs_db_home_database_software_image_display_name is optional: it resolves",
+    "a custom image by display name and the db_version above. Omit it to use the",
+    "standard OCI image for that version."
+  ],
+  "exacs_project": "customer-demo",
+  "exacs_environment": "nonprod",
+  "exacs_compartment_id": "ocid1.compartment.oc1..example",
+  "exacs_vm_cluster_id": "ocid1.cloudvmcluster.oc1.uk-london-1.example",
+
+  "exacs_db_home_key": "reporting_dbhome_23_26_3",
+  "exacs_db_home_display_name": "example-dbhome-23-26-3",
+  "exacs_db_home_db_version": "23.26.3.0.0",
+  "exacs_db_home_database_software_image_display_name": "example-db-image-23-26-3",
+  "exacs_db_home_is_desupported_version": false,
+  "exacs_db_home_timeout_seconds": 7200
+}

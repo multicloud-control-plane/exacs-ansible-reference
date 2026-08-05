@@ -1,0 +1,9 @@
+{
+  "_notes": [
+    "Copy this file to db-node-restart.json and replace every fictional OCID."
+  ],
+  "exacs_db_node_id": "ocid1.dbnode.oc1.uk-london-1.example",
+  "exacs_db_node_vm_cluster_id": "ocid1.cloudvmcluster.oc1.uk-london-1.example",
+  "exacs_db_node_compartment_id": "ocid1.compartment.oc1..example",
+  "exacs_db_node_timeout_seconds": 3600
+}

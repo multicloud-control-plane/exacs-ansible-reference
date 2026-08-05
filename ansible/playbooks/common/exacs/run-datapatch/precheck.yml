@@ -1,0 +1,67 @@
+---
+- name: Read the CDB before the datapatch
+  oracle.oci.oci_database_database_facts:
+    database_id: "{{ exacs_datapatch_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_datapatch_database_state
+  check_mode: false
+
+- name: Validate the approved datapatch boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_datapatch_database_state.databases | length == 1
+      # AVAILABLE is required, and it is not redundant with the resolver. A CDB
+      # settling after a Database Home move reports UPDATING for a while even
+      # though its datapatch is outstanding, and OCI answers runDatapatch with
+      # 409 IncorrectState in that window. Refusing here turns that into a clear
+      # refusal before the mutating call instead of a service error after it.
+      - exacs_datapatch_database_state.databases[0].lifecycle_state == 'AVAILABLE'
+      - exacs_datapatch_database_state.databases[0].db_name == exacs_datapatch_database_name
+      - exacs_datapatch_database_state.databases[0].compartment_id == exacs_datapatch_compartment_id
+    fail_msg: >-
+      The CDB does not match the approved identity, compartment, or
+      availability boundary.
+  check_mode: false
+
+# This stage deliberately does NOT call run-data-patch --action PRECHECK.
+# Despite its name that action is not read-only: it transitions the database to
+# UPDATING, which breaks the guarantee that a precheck changes nothing, and it
+# also makes the operation's own apply fail, because OCI answers runDatapatch
+# with 409 IncorrectState while the database is UPDATING. Measured on a real
+# tenancy: AVAILABLE, then the PRECHECK action, then UPDATING nine seconds
+# later.
+#
+# The same question is answered read-only by comparing the CDB's patch version
+# against the version of the Database Home it runs from. They diverge exactly
+# when a datapatch is outstanding, which is what OCI's own lifecycle-details
+# text reports in that situation.
+- name: Read the Database Home the CDB runs from
+  oracle.oci.oci_database_db_home_facts:
+    db_home_id: "{{ exacs_datapatch_database_state.databases[0].db_home_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_datapatch_db_home_state
+  check_mode: false
+
+- name: Require a datapatch to actually be outstanding
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_datapatch_db_home_state.db_homes | length == 1
+      - >-
+        exacs_datapatch_database_state.databases[0].patch_version
+        != exacs_datapatch_db_home_state.db_homes[0].db_version
+    fail_msg: >-
+      CDB {{ exacs_datapatch_database_name }} is already at the version of its
+      Database Home, so there is no datapatch to apply.
+  check_mode: false
+
+- name: Report the observed datapatch precheck
+  ansible.builtin.debug:
+    msg:
+      db_name: "{{ exacs_datapatch_database_state.databases[0].db_name }}"
+      database_id: "{{ exacs_datapatch_database_id }}"
+      pluggable_databases: "{{ exacs_datapatch_pdb_matches | map(attribute='pdb_name') | list }}"
+      cdb_patch_version: "{{ exacs_datapatch_database_state.databases[0].patch_version }}"
+      db_home_version: "{{ exacs_datapatch_db_home_state.db_homes[0].db_version }}"
+      lifecycle_details: "{{ exacs_datapatch_database_state.databases[0].lifecycle_details | default('') }}"

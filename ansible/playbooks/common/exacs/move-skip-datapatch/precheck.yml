@@ -1,0 +1,40 @@
+---
+- name: Read the CDB before the move
+  oracle.oci.oci_database_database_facts:
+    database_id: "{{ exacs_move_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_move_database_state
+  check_mode: false
+
+- name: Validate the approved move boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_move_database_state.databases | length == 1
+      - exacs_move_database_state.databases[0].lifecycle_state == 'AVAILABLE'
+      - exacs_move_database_state.databases[0].db_name == exacs_move_database_name
+      - exacs_move_database_state.databases[0].db_home_id == exacs_move_source_db_home.id
+      - exacs_move_database_state.databases[0].compartment_id == exacs_move_compartment_id
+      - exacs_move_source_db_home.lifecycle_state == 'AVAILABLE'
+      - exacs_move_target_db_home.lifecycle_state == 'AVAILABLE'
+      - exacs_move_target_db_home.db_version == exacs_move_target_db_version
+      - exacs_move_target_db_home.vm_cluster_id == exacs_move_vm_cluster_id
+      - exacs_move_source_db_home.vm_cluster_id == exacs_move_vm_cluster_id
+      - exacs_move_target_db_home.id != exacs_move_source_db_home.id
+    fail_msg: >-
+      The requested move does not match the current database state, the target
+      Database Home version, or the approved VM Cluster.
+  check_mode: false
+
+- name: Report the observed state before the move
+  ansible.builtin.debug:
+    msg:
+      db_name: "{{ exacs_move_database_state.databases[0].db_name }}"
+      source_database_home: "{{ exacs_move_source_db_home.display_name }}"
+      source_db_version: "{{ exacs_move_source_db_home.db_version }}"
+      target_database_home: "{{ exacs_move_target_db_home.display_name }}"
+      target_db_version: "{{ exacs_move_target_db_home.db_version }}"
+      warning: >-
+        Datapatch will NOT be run. The database will be running from the target
+        Oracle Home with its SQL patches still outstanding. Complete the patch
+        with exacs-database-run-datapatch inside a maintenance window.

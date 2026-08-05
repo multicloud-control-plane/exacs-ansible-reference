@@ -1,0 +1,13 @@
+---
+# Optional inventory for host-level tasks such as dbaascli. API-based Database
+# Home, CDB, and PDB masters run on localhost and do not need this inventory.
+plugin: oracle.oci.oci
+regions:
+  - uk-london-1
+compartments:
+  - compartment_ocid: ocid1.compartment.oc1..exampleuniqueID
+    fetch_hosts_from_subcompartments: false
+fetch_db_hosts: true
+fetch_compute_hosts: false
+hostname_format: private_ip
+cache: false

@@ -1,0 +1,22 @@
+---
+# Ansible resolves vars_files relative to the playbook directory, not to the
+# shell. A relative operation_file is skipped without an error, and the run
+# then fails on an undefined manifest variable, which reads like a manifest
+# mistake. Refuse it up front instead.
+- name: Require an absolute operation manifest path
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - operation_file is defined
+      - operation_file is string
+      - operation_file.startswith('/')
+    fail_msg: >-
+      operation_file must be an absolute path, for example
+      -e operation_file=$PWD/ansible/pdb-create.yml
+
+- name: Require an explicit execution mode
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - operation_execution_mode in ['precheck', 'execute']
+    fail_msg: operation_execution_mode must be precheck or execute.

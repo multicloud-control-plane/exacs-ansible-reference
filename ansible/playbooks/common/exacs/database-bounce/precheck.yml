@@ -1,0 +1,68 @@
+---
+- name: Read the CDB before the bounce
+  oracle.oci.oci_database_database_facts:
+    database_id: "{{ exacs_bounce_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_bounce_database_state
+  check_mode: false
+
+- name: Read the PDBs before the bounce
+  oracle.oci.oci_database_pluggable_database_facts:
+    database_id: "{{ exacs_bounce_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_bounce_pdb_state
+  check_mode: false
+
+- name: Validate the approved bounce boundary
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_bounce_database_state.databases | length == 1
+      - exacs_bounce_database_state.databases[0].lifecycle_state == 'AVAILABLE'
+      - exacs_bounce_database_state.databases[0].db_name == exacs_bounce_database_name
+      - exacs_bounce_database_state.databases[0].compartment_id == exacs_bounce_compartment_id
+      - exacs_bounce_node_address | length > 0
+      - exacs_bounce_ssh_private_key | length > 0
+    fail_msg: >-
+      The CDB does not match the approved identity or availability boundary,
+      no available DB node was found, or no SSH private key was supplied.
+  check_mode: false
+
+# Proves the runner can reach the node and run dbaascli there, before an
+# execute run depends on it. This is the check that fails first when host
+# access is missing, which is the usual reason a host operation cannot run.
+- name: Confirm dbaascli is reachable on the selected node
+  ansible.builtin.import_tasks: ../host/run-dbaascli.yml
+  vars:
+    exacs_host_node_address: "{{ exacs_bounce_node_address }}"
+    exacs_host_ssh_user: "{{ exacs_bounce_ssh_user | default('opc') }}"
+    exacs_host_ssh_private_key: "{{ exacs_bounce_ssh_private_key }}"
+    exacs_host_bastion_address: "{{ exacs_bounce_bastion_address | default('', true) }}"
+    exacs_host_bastion_user: "{{ exacs_bounce_bastion_user | default('opc') }}"
+    exacs_host_dbaascli_argv: ['--version']
+
+- name: Require dbaascli to have answered
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_host_dbaascli_result.rc == 0
+    fail_msg: >-
+      dbaascli did not answer on node {{ exacs_bounce_node_address }}. Confirm
+      SSH access from this runner to the VM Cluster subnet, the SSH user, and
+      the private key. Reported error:
+      {{ exacs_host_dbaascli_result.stderr | default('none') | trim }}
+  check_mode: false
+
+- name: Report the observed state before the bounce
+  ansible.builtin.debug:
+    msg:
+      db_name: "{{ exacs_bounce_database_state.databases[0].db_name }}"
+      lifecycle_state: "{{ exacs_bounce_database_state.databases[0].lifecycle_state }}"
+      node: "{{ exacs_bounce_node_address }}"
+      dbaascli_version: "{{ exacs_host_dbaascli_result.stdout | default('') | trim }}"
+      pluggable_databases: >-
+        {{ exacs_bounce_pdb_state.pluggable_databases
+           | map(attribute='pdb_name') | list }}
+      warning: >-
+        A bounce shuts the database down in immediate mode and restarts it.
+        Every session is disconnected.

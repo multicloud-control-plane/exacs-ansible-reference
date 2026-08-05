@@ -1,0 +1,45 @@
+---
+# Shared helper: resolve exactly one PDB inside a CDB from its ownership tags.
+#
+# The caller sets every input as an exacs_resolve_* var:
+#   exacs_resolve_container_database_id, exacs_resolve_key, exacs_resolve_pdb_name
+#
+# It leaves the single match in exacs_resolve_pdb. Copy that into an
+# operation-scoped var immediately, because a second import overwrites it.
+- name: List PDBs in the container database
+  oracle.oci.oci_database_pluggable_database_facts:
+    database_id: "{{ exacs_resolve_container_database_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_resolve_pdb_listing
+  check_mode: false
+
+- name: Select the PDB owning the requested key
+  ansible.builtin.set_fact:
+    # Read as one sentence: of the PDBs in this container database, keep the ones
+    # that carry ownership tags, then the ones belonging to this project, this
+    # environment and this resource key. The 'defined' step is required: without
+    # it the expression fails as soon as any PDB lacks the tag.
+    exacs_resolve_pdb_matches: >-
+      {{ exacs_resolve_pdb_listing.pluggable_databases
+         | selectattr('freeform_tags.exacs_project', 'defined')
+         | selectattr('freeform_tags.exacs_project', 'equalto', exacs_project)
+         | selectattr('freeform_tags.exacs_environment', 'equalto', exacs_environment)
+         | selectattr('freeform_tags.exacs_resource_key', 'equalto', exacs_resolve_key)
+         | list }}
+  check_mode: false
+
+- name: Validate the PDB resolution
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_resolve_pdb_matches | length == 1
+      - exacs_resolve_pdb_matches[0].pdb_name == exacs_resolve_pdb_name
+    fail_msg: >-
+      No single PDB owns resource key {{ exacs_resolve_key }} with name
+      {{ exacs_resolve_pdb_name }} inside the approved container database.
+  check_mode: false
+
+- name: Bind the resolved PDB
+  ansible.builtin.set_fact:
+    exacs_resolve_pdb: "{{ exacs_resolve_pdb_matches[0] }}"
+  check_mode: false

@@ -1,0 +1,25 @@
+---
+- name: Read the PDB after restart
+  oracle.oci.oci_database_pluggable_database_facts:
+    pluggable_database_id: "{{ exacs_pdb_id }}"
+    auth_type: "{{ exacs_auth_type }}"
+  register: exacs_pdb_post_state
+  check_mode: false
+
+- name: Assert the PDB restart completed
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_pdb_post_state.pluggable_databases | length == 1
+      - exacs_pdb_post_state.pluggable_databases[0].id == exacs_pdb_id
+      - exacs_pdb_post_state.pluggable_databases[0].lifecycle_state == 'AVAILABLE'
+      - exacs_pdb_post_state.pluggable_databases[0].open_mode == 'READ_WRITE'
+    fail_msg: The PDB did not return to AVAILABLE and READ_WRITE after the restart.
+  check_mode: false
+
+- name: Report final PDB state
+  ansible.builtin.debug:
+    msg:
+      pdb_name: "{{ exacs_pdb_post_state.pluggable_databases[0].pdb_name }}"
+      lifecycle_state: "{{ exacs_pdb_post_state.pluggable_databases[0].lifecycle_state }}"
+      open_mode: "{{ exacs_pdb_post_state.pluggable_databases[0].open_mode }}"

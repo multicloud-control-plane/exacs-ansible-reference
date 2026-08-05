@@ -1,0 +1,27 @@
+---
+- name: Resolve the created PDB by automation key
+  ansible.builtin.import_tasks: ../resolve/pdb-by-key.yml
+  vars:
+    exacs_resolve_container_database_id: "{{ exacs_pdb_cdb_matches[0].id }}"
+    exacs_resolve_key: "{{ exacs_pdb_key }}"
+    exacs_resolve_pdb_name: "{{ exacs_pdb_name }}"
+
+- name: Verify the created PDB
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - exacs_resolve_pdb.container_database_id == exacs_pdb_cdb_matches[0].id
+      - exacs_resolve_pdb.lifecycle_state == 'AVAILABLE'
+      - exacs_resolve_pdb.open_mode == 'READ_WRITE'
+    fail_msg: The created PDB is not available and open for read/write work in the approved CDB.
+  check_mode: false
+
+- name: Report the created PDB
+  ansible.builtin.debug:
+    msg:
+      resource_key: "{{ exacs_pdb_key }}"
+      pdb_name: "{{ exacs_resolve_pdb.pdb_name }}"
+      pluggable_database_id: "{{ exacs_resolve_pdb.id }}"
+      container_database_id: "{{ exacs_resolve_pdb.container_database_id }}"
+      lifecycle_state: "{{ exacs_resolve_pdb.lifecycle_state }}"
+      open_mode: "{{ exacs_resolve_pdb.open_mode }}"
